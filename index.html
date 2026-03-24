@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Pizza Planer">
+  <meta name="theme-color" content="#D94F2B">
+  <title>🍕 Pizza Planer</title>
+
+  <link rel="manifest" href="data:application/json,%7B%22name%22%3A%22Pizza%20Planer%22%2C%22short_name%22%3A%22Pizza%22%2C%22start_url%22%3A%22.%2Fpizza-planer.html%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23F5F0EB%22%2C%22theme_color%22%3A%22%23D94F2B%22%7D">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --red:    #D94F2B;
+      --orange: #F07A3A;
+      --bg:     #F5F0EB;
+      --card:   #FFFFFF;
+      --text:   #1C1A18;
+      --muted:  #7A7167;
+      --border: #E8E0D5;
+      --r:      16px;
+      --r-sm:   10px;
+      --shadow: 0 2px 16px rgba(0,0,0,0.08);
+    }
+
+    html { height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100%;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      padding-bottom: calc(36px + env(safe-area-inset-bottom));
+    }
+
+    /* ── Header ─────────────────────────────────────────────────── */
+    .header {
+      background: linear-gradient(160deg, #D94F2B 0%, #C0381A 100%);
+      color: #fff;
+      padding: calc(52px + env(safe-area-inset-top)) 20px 32px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .header::after {
+      content: '';
+      position: absolute;
+      bottom: -1px; left: 0; right: 0;
+      height: 24px;
+      background: var(--bg);
+      border-radius: 24px 24px 0 0;
+    }
+    .header-emoji { font-size: 54px; line-height: 1; margin-bottom: 10px; display: block; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2)); }
+    .header h1   { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
+    .header p    { font-size: 14px; opacity: 0.8; margin-top: 4px; }
+
+    /* ── Layout ──────────────────────────────────────────────────── */
+    .container {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 8px 16px;
+    }
+
+    /* ── Cards ───────────────────────────────────────────────────── */
+    .card {
+      background: var(--card);
+      border-radius: var(--r);
+      padding: 20px;
+      margin-bottom: 12px;
+      box-shadow: var(--shadow);
+    }
+    .card-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    /* ── Datetime ────────────────────────────────────────────────── */
+    input[type="datetime-local"] {
+      width: 100%;
+      padding: 14px 16px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--r-sm);
+      font-size: 17px;
+      font-family: inherit;
+      font-weight: 500;
+      color: var(--text);
+      background: #FAFAF8;
+      -webkit-appearance: none;
+      appearance: none;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input[type="datetime-local"]:focus { border-color: var(--red); }
+
+    /* ── Methoden-Buttons ────────────────────────────────────────── */
+    .method-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .method-btn {
+      padding: 14px 6px 12px;
+      border: 2px solid var(--border);
+      border-radius: var(--r-sm);
+      background: #FAFAF8;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.18s;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .method-btn.active   { border-color: var(--red); background: #FEF3EF; }
+    .method-icon         { font-size: 26px; display: block; margin-bottom: 5px; line-height: 1; }
+    .method-name         { font-size: 12px; font-weight: 700; color: var(--muted); line-height: 1.3; }
+    .method-btn.active .method-name { color: var(--red); }
+    .method-sub          { font-size: 10px; color: #B0A898; margin-top: 2px; }
+    .method-btn.active .method-sub  { color: #E07050; }
+
+    /* ── Teigzeit-Karte ──────────────────────────────────────────── */
+    .teig-hint {
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--muted);
+      min-height: 18px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .teig-hint .pill {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      background: #F0EBE5;
+      color: var(--muted);
+    }
+    .teig-hint .pill.ok    { background: #E8F5E9; color: #2E7D32; }
+    .teig-hint .pill.warn  { background: #FFF3E0; color: #E65100; }
+    .teig-hint .pill.error { background: #FFEBEE; color: #C62828; }
+
+    /* ── Berechnen-Button ────────────────────────────────────────── */
+    .calc-btn {
+      width: 100%;
+      padding: 17px;
+      background: linear-gradient(135deg, var(--orange), var(--red));
+      color: #fff;
+      border: none;
+      border-radius: var(--r);
+      font-size: 17px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      margin-bottom: 12px;
+      box-shadow: 0 4px 16px rgba(217,79,43,0.35);
+      letter-spacing: -0.2px;
+      transition: transform 0.1s, box-shadow 0.1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .calc-btn:active { transform: scale(0.98); box-shadow: 0 2px 8px rgba(217,79,43,0.2); }
+
+    /* ── Timeline ────────────────────────────────────────────────── */
+    .timeline-card { display: none; animation: fadeUp 0.35s ease both; }
+    .timeline-card.visible { display: block; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .tl-heading {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .badge {
+      font-size: 11px; font-weight: 700;
+      padding: 3px 9px; border-radius: 20px; color: #fff;
+    }
+    .badge-sameday { background: #F07A3A; }
+    .badge-1nacht  { background: #4A90D9; }
+    .badge-2naechte{ background: #7B54C4; }
+
+    .step { display: flex; gap: 14px; }
+    .step-left {
+      display: flex; flex-direction: column; align-items: center;
+      flex-shrink: 0; width: 44px;
+    }
+    .step-dot {
+      width: 40px; height: 40px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0; z-index: 1;
+    }
+    .step-line {
+      width: 2px; flex: 1; min-height: 18px;
+      border-radius: 1px; margin: 4px 0;
+    }
+    .step-right { flex: 1; padding-bottom: 22px; }
+    .step-time  {
+      font-size: 15px; font-weight: 700; letter-spacing: -0.3px; line-height: 1;
+    }
+    .step-time .day-tag {
+      display: inline-block;
+      font-size: 11px; font-weight: 600;
+      padding: 1px 7px; border-radius: 8px;
+      background: #F0EBE5; color: var(--muted);
+      margin-left: 6px; vertical-align: middle;
+    }
+    .step-title { font-size: 15px; font-weight: 600; color: var(--text); margin-top: 3px; }
+    .step-desc  { font-size: 13px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+
+    .step.highlight .step-dot  { box-shadow: 0 4px 12px rgba(217,79,43,0.4); }
+    .step.highlight .step-time { color: var(--red); font-size: 18px; }
+    .step.highlight .step-title{ color: var(--red); font-size: 16px; }
+
+    /* ── Footer ──────────────────────────────────────────────────── */
+    footer { text-align: center; font-size: 12px; color: #C0B8B0; padding: 12px 0 4px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <span class="header-emoji">🍕</span>
+    <h1>Pizza Planer</h1>
+    <p>Perfektes Timing für perfekte Pizza</p>
+  </div>
+
+  <div class="container">
+
+    <!-- 1. Backzeit -->
+    <div class="card">
+      <div class="card-label">Wann möchtest du backen?</div>
+      <input type="datetime-local" id="backzeit" oninput="onBackzeitChange()">
+    </div>
+
+    <!-- 2. Methode -->
+    <div class="card">
+      <div class="card-label">Garzeit-Methode</div>
+      <div class="method-grid">
+        <div class="method-btn active" id="btn-sameday" onclick="selectMethod('sameday')">
+          <span class="method-icon">☀️</span>
+          <span class="method-name">Selber Tag</span>
+          <span class="method-sub">Kurze Gare</span>
+        </div>
+        <div class="method-btn" id="btn-1nacht" onclick="selectMethod('1nacht')">
+          <span class="method-icon">🌙</span>
+          <span class="method-name">1 Nacht</span>
+          <span class="method-sub">Kühlschrank</span>
+        </div>
+        <div class="method-btn" id="btn-2naechte" onclick="selectMethod('2naechte')">
+          <span class="method-icon">⭐</span>
+          <span class="method-name">2 Nächte</span>
+          <span class="method-sub">Kühlschrank</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Teigzeit -->
+    <div class="card">
+      <div class="card-label">Wann möchtest du den Teig machen?</div>
+      <input type="datetime-local" id="teigzeit" oninput="onTeigzeitChange()">
+      <div class="teig-hint" id="teig-hint"></div>
+    </div>
+
+    <!-- Button -->
+    <button class="calc-btn" onclick="calculate()">Zeitplan berechnen →</button>
+
+    <!-- Timeline -->
+    <div class="card timeline-card" id="timeline-card">
+      <div class="tl-heading">
+        📅 Dein Zeitplan
+        <span class="badge" id="method-badge"></span>
+      </div>
+      <div id="timeline-steps"></div>
+    </div>
+
+    <footer>Buon appetito! 🍕</footer>
+  </div>
+
+  <script>
+    // ── State ────────────────────────────────────────────────────
+    let currentMethod = 'sameday';
+
+    const WOCHENTAGE = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+    const MONATE     = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+
+    // ── Init ─────────────────────────────────────────────────────
+    window.addEventListener('DOMContentLoaded', () => {
+      // Backzeit: heute 18:00, falls vorbei → morgen 18:00
+      const now = new Date();
+      const bz  = new Date(now);
+      bz.setHours(18, 0, 0, 0);
+      if (bz <= now) bz.setDate(bz.getDate() + 1);
+      document.getElementById('backzeit').value = toISO(bz);
+
+      // Teigzeit: vorgeschlagen je nach Methode
+      setTeigDefault(bz);
+      updateHint();
+    });
+
+    // ── Hilfsfunktionen ──────────────────────────────────────────
+    function addMins(d, m) { return new Date(d.getTime() + m * 60_000); }
+
+    function toISO(d) {
+      const p = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+
+    function fmtTime(d) {
+      return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    }
+
+    function fmtDayTag(d) {
+      // "Heute", "Gestern", "Morgen" etc. – immer relativ zum echten Heute
+      const today = new Date(); today.setHours(0,0,0,0);
+      const day   = new Date(d); day.setHours(0,0,0,0);
+      const diff  = Math.round((day - today) / 86_400_000);
+      if (diff === 0)  return 'Heute';
+      if (diff === -1) return 'Gestern';
+      if (diff === -2) return 'Vorgestern';
+      if (diff === 1)  return 'Morgen';
+      if (diff === 2)  return 'Übermorgen';
+      return `${WOCHENTAGE[d.getDay()]}, ${d.getDate()}. ${MONATE[d.getMonth()]}`;
+    }
+
+    function fmtDauer(mins) {
+      const d = Math.floor(mins / (60 * 24));
+      const h = Math.floor((mins % (60 * 24)) / 60);
+      const m = mins % 60;
+      let out = '';
+      if (d > 0) out += `${d} Tag${d > 1 ? 'e' : ''} `;
+      if (h > 0) out += `${h} Std. `;
+      if (m > 0) out += `${m} Min.`;
+      return out.trim() || '0 Min.';
+    }
+
+    // ── Teigzeit-Vorschlag ────────────────────────────────────────
+    // Selber Tag: 3.5h vor Backzeit  (30min Stockgare + 3h Stückgare)
+    // 1 Nacht:    Vortag 20:00
+    // 2 Nächte:   2 Tage vorher 20:00
+    function setTeigDefault(backzeit) {
+      let teig;
+      if (currentMethod === 'sameday') {
+        teig = addMins(backzeit, -(3 * 60 + 30));
+      } else if (currentMethod === '1nacht') {
+        teig = new Date(backzeit);
+        teig.setDate(teig.getDate() - 1);
+        teig.setHours(20, 0, 0, 0);
+      } else {
+        teig = new Date(backzeit);
+        teig.setDate(teig.getDate() - 2);
+        teig.setHours(20, 0, 0, 0);
+      }
+      document.getElementById('teigzeit').value = toISO(teig);
+    }
+
+    // ── Event-Handler ─────────────────────────────────────────────
+    function onBackzeitChange() {
+      const bz = getBackzeit();
+      if (bz) { setTeigDefault(bz); updateHint(); }
+      document.getElementById('timeline-card').classList.remove('visible');
+    }
+
+    function onTeigzeitChange() {
+      updateHint();
+      document.getElementById('timeline-card').classList.remove('visible');
+    }
+
+    function selectMethod(m) {
+      currentMethod = m;
+      ['sameday','1nacht','2naechte'].forEach(k =>
+        document.getElementById('btn-' + k).classList.toggle('active', k === m)
+      );
+      const bz = getBackzeit();
+      if (bz) setTeigDefault(bz);
+      updateHint();
+      document.getElementById('timeline-card').classList.remove('visible');
+    }
+
+    // ── Hint unter Teigzeit ───────────────────────────────────────
+    function updateHint() {
+      const hint = document.getElementById('teig-hint');
+      const gap  = getGapInfo();
+      if (!gap) { hint.innerHTML = ''; return; }
+
+      const { stückgareMin, valid, minNeeded } = gap;
+
+      if (!valid) {
+        const needed = fmtDauer(minNeeded);
+        hint.innerHTML = `<span class="pill error">⚠ Zu wenig Zeit – mind. ${needed} Abstand nötig</span>`;
+        return;
+      }
+
+      const label = currentMethod === 'sameday'
+        ? `${fmtDauer(stückgareMin)} Stückgare bei Raumtemperatur`
+        : `${fmtDauer(stückgareMin)} Stückgare im Kühlschrank`;
+
+      const cls = stückgareMin >= 120 ? 'ok' : 'warn';
+      hint.innerHTML = `<span class="pill ${cls}">→ ${label}</span>`;
+    }
+
+    // ── Validierung & Gap-Berechnung ──────────────────────────────
+    // Rückgabe: { stückgareMin, valid, minNeeded }
+    function getGapInfo() {
+      const bz = getBackzeit();
+      const tz = getTeigzeit();
+      if (!bz || !tz) return null;
+
+      const totalMins = (bz - tz) / 60_000;    // Gesamtdifferenz in Minuten
+
+      if (currentMethod === 'sameday') {
+        // Stückgare = total - 30min Stockgare
+        const stückgareMin = Math.round(totalMins - 30);
+        const minNeeded = 30 + 60; // 30min Stockgare + 1h Stückgare min
+        return { stückgareMin, valid: stückgareMin >= 60, minNeeded };
+      } else {
+        // Stückgare = total - 30min Stockgare - 2h Akklimatisierung
+        const stückgareMin = Math.round(totalMins - 30 - 120);
+        const minNeeded = 30 + 120 + 60; // Stockgare + Akklim + min 1h Stückgare
+        return { stückgareMin, valid: stückgareMin >= 60, minNeeded };
+      }
+    }
+
+    function getBackzeit() {
+      const v = document.getElementById('backzeit').value;
+      return v ? new Date(v) : null;
+    }
+    function getTeigzeit() {
+      const v = document.getElementById('teigzeit').value;
+      return v ? new Date(v) : null;
+    }
+
+    // ── Berechnung & Timeline ─────────────────────────────────────
+    function calculate() {
+      const bz  = getBackzeit();
+      const tz  = getTeigzeit();
+      if (!bz) { alert('Bitte eine Backzeit eingeben.'); return; }
+      if (!tz) { alert('Bitte eine Teigzeit eingeben.'); return; }
+
+      const gap = getGapInfo();
+      if (!gap || !gap.valid) {
+        alert('Der Zeitabstand zwischen Teig und Backzeit ist zu gering.\nBitte passe die Zeiten an.');
+        return;
+      }
+
+      renderTimeline(buildSteps(bz, tz, gap.stückgareMin));
+    }
+
+    function buildSteps(bz, tz, stückgareMin) {
+      const tTeig       = tz;
+      const tStückgare  = addMins(tz, 30);                 // nach Stockgare
+      const tOfen       = addMins(bz, -30);
+
+      if (currentMethod === 'sameday') {
+        return [
+          {
+            emoji: '🥣', time: tTeig,
+            title: 'Teig herstellen',
+            desc:  'Zutaten vermengen und Teig kneten. Anschließend 30 Min. Stockgare bei Raumtemperatur.',
+            color: '#F5C842', line: '#FAE07A'
+          },
+          {
+            emoji: '🔵', time: tStückgare,
+            title: 'Stückgare beginnt',
+            desc:  `Teig in Portionen aufteilen, abdecken und ${fmtDauer(stückgareMin)} bei Raumtemperatur gehen lassen.`,
+            color: '#3B82F6', line: '#93C5FD'
+          },
+          {
+            emoji: '🔥', time: tOfen,
+            title: 'Ofen anmachen',
+            desc:  'Auf höchste Stufe vorheizen – mit Pizzastein oder Backstahl.',
+            color: '#EF4444', line: '#FCA5A5'
+          },
+          {
+            emoji: '🍕', time: bz,
+            title: 'Backen!',
+            desc:  'Pizza belegen, ausziehen und direkt in den heißen Ofen.',
+            color: '#D94F2B', line: null, highlight: true
+          }
+        ];
+      } else {
+        const tAkklim = addMins(bz, -120);
+        return [
+          {
+            emoji: '🥣', time: tTeig,
+            title: 'Teig herstellen',
+            desc:  'Zutaten vermengen und Teig kneten. Anschließend 30 Min. Stockgare bei Raumtemperatur.',
+            color: '#F5C842', line: '#FAE07A'
+          },
+          {
+            emoji: '❄️', time: tStückgare,
+            title: 'In den Kühlschrank',
+            desc:  `Teig in Portionen aufteilen, abdecken und für ${fmtDauer(stückgareMin)} in den Kühlschrank stellen (4–6 °C).`,
+            color: '#4A90D9', line: '#93C5FD'
+          },
+          {
+            emoji: '🌡️', time: tAkklim,
+            title: 'Akklimatisierung',
+            desc:  'Teig aus dem Kühlschrank holen und 2 Std. bei Raumtemperatur temperieren lassen.',
+            color: '#8B5CF6', line: '#C4B5FD'
+          },
+          {
+            emoji: '🔥', time: tOfen,
+            title: 'Ofen anmachen',
+            desc:  'Auf höchste Stufe vorheizen – mit Pizzastein oder Backstahl.',
+            color: '#EF4444', line: '#FCA5A5'
+          },
+          {
+            emoji: '🍕', time: bz,
+            title: 'Backen!',
+            desc:  'Pizza belegen, ausziehen und direkt in den heißen Ofen.',
+            color: '#D94F2B', line: null, highlight: true
+          }
+        ];
+      }
+    }
+
+    // ── Rendering ─────────────────────────────────────────────────
+    function renderTimeline(steps) {
+      const container = document.getElementById('timeline-steps');
+      container.innerHTML = '';
+
+      const badge   = document.getElementById('method-badge');
+      const labels  = { sameday: 'Selber Tag', '1nacht': '1 Nacht', '2naechte': '2 Nächte' };
+      const classes = { sameday: 'badge-sameday', '1nacht': 'badge-1nacht', '2naechte': 'badge-2naechte' };
+      badge.textContent = labels[currentMethod];
+      badge.className   = 'badge ' + classes[currentMethod];
+
+      steps.forEach((s, i) => {
+        const isLast = i === steps.length - 1;
+        const dayTag = fmtDayTag(s.time);
+        const el = document.createElement('div');
+        el.className = 'step' + (s.highlight ? ' highlight' : '');
+        el.innerHTML = `
+          <div class="step-left">
+            <div class="step-dot" style="background:${s.color}1A;color:${s.color}">${s.emoji}</div>
+            ${!isLast ? `<div class="step-line" style="background:${s.line || s.color+'40'}"></div>` : ''}
+          </div>
+          <div class="step-right">
+            <div class="step-time">
+              ${fmtTime(s.time)}
+              <span class="day-tag">${dayTag}</span>
+            </div>
+            <div class="step-title">${s.title}</div>
+            <div class="step-desc">${s.desc}</div>
+          </div>`;
+        container.appendChild(el);
+      });
+
+      const card = document.getElementById('timeline-card');
+      card.classList.add('visible');
+      setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    }
+  </script>
+</body>
+</html>
