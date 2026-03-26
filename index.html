@@ -225,6 +225,26 @@
     .step.highlight .step-time { color: var(--red); font-size: 18px; }
     .step.highlight .step-title{ color: var(--red); font-size: 16px; }
 
+    /* ── Kalender-Export-Button ──────────────────────────────────── */
+    .export-btn {
+      width: 100%;
+      padding: 14px;
+      background: #fff;
+      color: var(--red);
+      border: 2px solid var(--red);
+      border-radius: var(--r);
+      font-size: 15px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      margin-top: 16px;
+      letter-spacing: -0.2px;
+      transition: background 0.15s, color 0.15s;
+      -webkit-tap-highlight-color: transparent;
+      display: none;
+    }
+    .export-btn:active { background: #FEF3EF; }
+
     /* ── Footer ──────────────────────────────────────────────────── */
     footer { text-align: center; font-size: 12px; color: #C0B8B0; padding: 12px 0 4px; }
   </style>
@@ -284,6 +304,9 @@
         <span class="badge" id="method-badge"></span>
       </div>
       <div id="timeline-steps"></div>
+      <button class="export-btn" id="export-btn" onclick="exportToCalendar()">
+        📅 In Kalender exportieren
+      </button>
     </div>
 
     <footer>Buon appetito! 🍕</footer>
@@ -292,6 +315,7 @@
   <script>
     // ── State ────────────────────────────────────────────────────
     let currentMethod = 'sameday';
+    let currentSteps  = [];
 
     const WOCHENTAGE = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
     const MONATE     = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
@@ -347,23 +371,37 @@
     }
 
     // ── Teigzeit-Vorschlag ────────────────────────────────────────
-    // Selber Tag: 3.5h vor Backzeit  (30min Stockgare + 3h Stückgare)
-    // 1 Nacht:    Vortag 20:00
-    // 2 Nächte:   2 Tage vorher 20:00
-    function setTeigDefault(backzeit) {
-      let teig;
+    // Gibt die vorgeschlagene Teigzeit für eine gegebene Backzeit zurück
+    function computeTeigDefault(bz) {
       if (currentMethod === 'sameday') {
-        teig = addMins(backzeit, -(3 * 60 + 30));
+        return addMins(bz, -(3 * 60 + 30));
       } else if (currentMethod === '1nacht') {
-        teig = new Date(backzeit);
-        teig.setDate(teig.getDate() - 1);
-        teig.setHours(20, 0, 0, 0);
+        const t = new Date(bz);
+        t.setDate(t.getDate() - 1);
+        t.setHours(20, 0, 0, 0);
+        return t;
       } else {
-        teig = new Date(backzeit);
-        teig.setDate(teig.getDate() - 2);
-        teig.setHours(20, 0, 0, 0);
+        const t = new Date(bz);
+        t.setDate(t.getDate() - 2);
+        t.setHours(20, 0, 0, 0);
+        return t;
       }
-      document.getElementById('teigzeit').value = toISO(teig);
+    }
+
+    // Verschiebt Backzeit nach vorne, falls die Teigzeit sonst in der Vergangenheit läge
+    function advanceBackzeitIfNeeded(bz) {
+      if (currentMethod === 'sameday') return bz; // sameday braucht keine Prüfung
+      const now = new Date();
+      let result = new Date(bz);
+      for (let i = 0; i < 10; i++) {
+        if (computeTeigDefault(result) >= now) break;
+        result.setDate(result.getDate() + 1);
+      }
+      return result;
+    }
+
+    function setTeigDefault(bz) {
+      document.getElementById('teigzeit').value = toISO(computeTeigDefault(bz));
     }
 
     // ── Event-Handler ─────────────────────────────────────────────
@@ -383,8 +421,14 @@
       ['sameday','1nacht','2naechte'].forEach(k =>
         document.getElementById('btn-' + k).classList.toggle('active', k === m)
       );
-      const bz = getBackzeit();
-      if (bz) setTeigDefault(bz);
+      let bz = getBackzeit() || new Date();
+      // Backzeit automatisch verschieben, falls Teigzeit sonst in der Vergangenheit
+      const adjusted = advanceBackzeitIfNeeded(bz);
+      if (adjusted.getTime() !== bz.getTime()) {
+        document.getElementById('backzeit').value = toISO(adjusted);
+        bz = adjusted;
+      }
+      setTeigDefault(bz);
       updateHint();
       document.getElementById('timeline-card').classList.remove('visible');
     }
@@ -455,7 +499,8 @@
         return;
       }
 
-      renderTimeline(buildSteps(bz, tz, gap.stückgareMin));
+      currentSteps = buildSteps(bz, tz, gap.stückgareMin);
+      renderTimeline(currentSteps);
     }
 
     function buildSteps(bz, tz, stückgareMin) {
@@ -561,7 +606,54 @@
 
       const card = document.getElementById('timeline-card');
       card.classList.add('visible');
+      document.getElementById('export-btn').style.display = 'block';
       setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    }
+
+    // ── Kalender-Export (ICS) ──────────────────────────────────────
+    function toICSDate(d) {
+      const p = n => String(n).padStart(2, '0');
+      return `${d.getUTCFullYear()}${p(d.getUTCMonth()+1)}${p(d.getUTCDate())}T${p(d.getUTCHours())}${p(d.getUTCMinutes())}00Z`;
+    }
+
+    function generateICS(steps) {
+      const lines = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Pizza Planer//DE',
+        'CALSCALE:GREGORIAN',
+        'METHOD:PUBLISH',
+      ];
+      steps.forEach(s => {
+        lines.push('BEGIN:VEVENT');
+        lines.push('DTSTART:' + toICSDate(s.time));
+        lines.push('DTEND:'   + toICSDate(addMins(s.time, 15)));
+        lines.push('SUMMARY:' + s.emoji + ' ' + s.title);
+        lines.push('DESCRIPTION:' + s.desc.replace(/,/g, '\\,'));
+        lines.push('UID:pizza-' + s.time.getTime() + '@pizza-planer');
+        // Alarm: Benachrichtigung genau zum Ereigniszeitpunkt
+        lines.push('BEGIN:VALARM');
+        lines.push('TRIGGER:PT0M');
+        lines.push('ACTION:DISPLAY');
+        lines.push('DESCRIPTION:' + s.emoji + ' ' + s.title);
+        lines.push('END:VALARM');
+        lines.push('END:VEVENT');
+      });
+      lines.push('END:VCALENDAR');
+      return lines.join('\r\n');
+    }
+
+    function exportToCalendar() {
+      const ics  = generateICS(currentSteps);
+      const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = 'pizza-zeitplan.ics';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     }
   </script>
 </body>
